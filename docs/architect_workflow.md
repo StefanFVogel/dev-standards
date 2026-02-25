@@ -80,6 +80,39 @@ if __name__ == "__main__":
 
 ---
 
+Das Quality-Gate-Script liegt unter `scripts/maintain_tools.py` und nutzt drei Sensoren:
+
+| Tool | Zweck | Grenzwert |
+|------|-------|-----------|
+| **Radon** | Zyklomatische Komplexität | CC ≤ 10 (Gelb), CC < 20 (Rot) |
+| **Vulture** | Toter Code | 0% Toleranz |
+| **jscpd** | Code-Duplikation | < 5% |
+
+### Tools installieren
+
+Alle benötigten Tools lassen sich mit einem einzigen Befehl installieren:
+
+```bash
+python standards/scripts/maintain_tools.py --setup
+```
+
+Dies führt automatisch 3 Schritte aus:
+1. **Python-Pakete** installieren (via pip): `radon`, `vulture`, `ruff`, `pyright`, `sqlfluff`
+2. **Node.js/npm** installieren via `nodeenv` (falls npm nicht vorhanden)
+3. **Node.js-Pakete** installieren (via npm): `jscpd`, `@biomejs/biome`, `knip`
+
+**Manuelle Installation** (alternativ):
+
+```bash
+# Python-Tools
+pip install -U radon vulture ruff pyright sqlfluff
+
+# Node.js-Tools
+npm install --save-dev @biomejs/biome knip jscpd
+```
+
+---
+
 ## 🔄 2. Der Review-Zyklus (in Claude Code)
 
 1. **Analyse starten:**

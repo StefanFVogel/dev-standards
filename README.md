@@ -11,13 +11,46 @@ Zentrale Sammlung von Entwicklungsstandards, Coding Guidelines und Quality-Gate-
 | `docs/architect_workflow.md` | Automatisierte Qualitätskontrolle mit der Architekten-Ampel |
 | `scripts/maintain_tools.py` | Quality-Gate-Script: Komplexität (Radon), toter Code (Vulture), Duplikation (jscpd) |
 
+## Voraussetzungen
+
+Das Quality-Gate-Script (`scripts/maintain_tools.py`) benötigt folgende Tools:
+
+| Tool | Zweck | Typ |
+|------|-------|-----|
+| **radon** | Zyklomatische Komplexität messen | Python-Paket |
+| **vulture** | Toten Code erkennen | Python-Paket |
+| **jscpd** | Code-Duplikation erkennen | Node.js-Paket (optional) |
+
+### Automatische Installation (Empfohlen)
+
+Das Script enthält ein `--setup` Flag, das alle Tools automatisch installiert:
+
+```bash
+python standards/scripts/maintain_tools.py --setup
+```
+
+Dies führt automatisch 3 Schritte aus:
+1. **Python-Pakete** installieren: `radon`, `vulture`, `ruff`, `pyright`, `sqlfluff`
+2. **Node.js/npm** installieren via `nodeenv` (falls npm nicht vorhanden)
+3. **Node.js-Pakete** installieren: `jscpd`, `@biomejs/biome`, `knip`
+
+### Manuelle Installation
+
+```bash
+# Python-Tools
+pip install -U radon vulture ruff pyright sqlfluff
+
+# Node.js-Tools
+npm install --save-dev @biomejs/biome knip jscpd
+```
+
 ---
 
 # Git Submodule Setup
 
 Diese Anleitung beschreibt, wie das Repository `dev-standards` als Submodule in ein Projekt integriert wird und wie andere Entwickler das Projekt korrekt auschecken.
 
-## 1. Submodule hinzufügen (Installation)
+## 1. Submodule hinzufügen
 
 Um das externe Repository direkt in den Ordner `standards` zu laden, führe im Hauptverzeichnis des Projekts folgenden Befehl aus:
 

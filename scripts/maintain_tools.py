@@ -189,10 +189,38 @@ def get_files(mode):
 
 def setup_tools():
     print("--- [SETUP] ---")
+
+    # 1. Python-Pakete installieren
+    print("\n[1/3] Python-Pakete installieren...")
     subprocess.run([sys.executable, "-m", "pip", "install", "-U", "ruff", "vulture", "sqlfluff", "pyright", "radon"])
+
+    # 2. Node.js/npm installieren (falls nicht vorhanden), via nodeenv (pyright-Abhängigkeit)
+    if not shutil.which("npm"):
+        print("\n[2/3] npm nicht gefunden - installiere Node.js via nodeenv...")
+        node_dir = os.path.join(os.path.dirname(sys.executable), "..", "node_env")
+        node_dir = os.path.normpath(node_dir)
+        subprocess.run([sys.executable, "-m", "nodeenv", "--prebuilt", node_dir])
+        # npm-Pfad zur aktuellen Session hinzufügen
+        if os.name == "nt":
+            npm_bin = os.path.join(node_dir, "Scripts")
+        else:
+            npm_bin = os.path.join(node_dir, "bin")
+        os.environ["PATH"] = npm_bin + os.pathsep + os.environ["PATH"]
+        if shutil.which("npm"):
+            print(f"[OK] Node.js installiert in: {node_dir}")
+        else:
+            print("[WARN] Node.js Installation fehlgeschlagen - Duplikationsprüfung nicht verfügbar.")
+    else:
+        print("\n[2/3] npm bereits vorhanden - überspringe Node.js Installation.")
+
+    # 3. Node.js-Pakete installieren
     if shutil.which("npm"):
+        print("\n[3/3] Node.js-Pakete installieren...")
         subprocess.run("npm install --save-dev @biomejs/biome knip jscpd", shell=True)
-    print("[OK] Setup bereit.")
+    else:
+        print("\n[3/3] Überspringe Node.js-Pakete (npm nicht verfügbar).")
+
+    print("\n[OK] Setup bereit.")
 
 
 if __name__ == "__main__":
