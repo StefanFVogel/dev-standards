@@ -175,10 +175,23 @@ def run_review(mode):
     print_detailed_scan(py_files, dead_items, files)
 
 
+def _get_default_branch():
+    """Detects the default branch (main/master) of the repository."""
+    res = run_cmd("git symbolic-ref refs/remotes/origin/HEAD")
+    if res.returncode == 0 and res.stdout.strip():
+        return res.stdout.strip().replace("refs/remotes/origin/", "")
+    for candidate in ("main", "master"):
+        check = run_cmd(f"git rev-parse --verify {candidate}")
+        if hasattr(check, "returncode") and check.returncode == 0:
+            return candidate
+    return "main"
+
+
 def get_files(mode):
+    default_branch = _get_default_branch()
     cmds = {
         "commit": "git diff --name-only HEAD",
-        "branch": "git diff --name-only main...",
+        "branch": f"git diff --name-only {default_branch}...",
         "yesterday": "git diff --name-only @{yesterday}",
         "all": "git ls-files",
     }
