@@ -9,6 +9,7 @@ Zentrale Sammlung von Entwicklungsstandards, Coding Guidelines und Quality-Gate-
 | `docs/ai_guidelines.md` | Globale AI Coding Standards (Quality Gates, Python Standards, Architektur-Patterns) |
 | `docs/implementation.md` | Implementierungs-Richtlinien & Coding Standards (Naming, Typing, Error Handling) |
 | `docs/architect_workflow.md` | Automatisierte Qualitätskontrolle mit der Architekten-Ampel |
+| `docs/feature_development_workflow.md` | Feature-Entwicklungsprozess: Spezifikation → Prototyp → Architektur-Review → Code-Review |
 | `scripts/maintain_tools.py` | Quality-Gate-Script: Komplexität (Radon), toter Code (Vulture), Duplikation (jscpd) |
 
 ## Voraussetzungen
