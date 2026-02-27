@@ -56,6 +56,18 @@ Wir nutzen moderne Python (3.12+) Features.
     *   ✅ `stock_prices = get_stock_prices()`
     *   ❌ `l = []`
     *   ✅ `active_users = []`
+*   **Keine Einbuchstaben-Variablen** — außer `i`, `j`, `k` als Loop-Counter oder `_` für explizit ignorierte Werte.
+    *   ❌ `c` in Comprehensions → ✅ `constraint`
+    *   ❌ `x` → ✅ den tatsächlichen Inhalt benennen
+*   **Keine kryptischen Abkürzungen.** Der Name muss ohne Kontextsprung verständlich sein.
+    *   ❌ `sub`, `subs` → ✅ `subscriber`, `subscribers`
+    *   ❌ `cs` → ✅ `cumulative_score`
+    *   ❌ `uid` → ✅ `user_id`
+    *   ❌ `xss_name` → ✅ `xss_payload` (beschreibt den Inhalt, nicht den Typ)
+*   **Rückgabewerte sprechend benennen.** `result` ist selten aussagekräftig — der Name soll verraten, *was* zurückkommt.
+    *   ❌ `result = await resolve_user_email(...)` → ✅ `email = await resolve_user_email(...)`
+    *   ❌ `result = await get_current_price(...)` → ✅ `price_data = await get_current_price(...)`
+    *   ❌ `result = await manager.update_settings(...)` → ✅ `updated_settings = await manager.update_settings(...)`
 *   **Funktionen:** `snake_case`. Müssen ein **Verb** enthalten.
     *   ❌ `user()`
     *   ✅ `get_user()`, `calculate_score()`, `validate_input()`
@@ -135,4 +147,4 @@ Bevor du einen Pull Request erstellst oder Code als "fertig" markierst:
 - [ ] Keine Business-Logik im Router?
 - [ ] Asynchrone DB-Zugriffe verwendet?
 - [ ] Docstrings für LLM-Tools verständlich?
-- [ ] Sprechende Variablennamen verwendet?
+- [ ] Sprechende Variablennamen verwendet? (keine Einbuchstaben, keine Abkürzungen, kein generisches `result`)
