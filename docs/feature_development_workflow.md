@@ -18,6 +18,7 @@ Für jedes Feature werden folgende Dokumente im `docs/`-Verzeichnis des Projekts
 |----------|-------|---------|
 | Architekturkonzept | `docs/<feature>_architecture_concept.md` | Ja |
 | Implementierungsplan | `docs/<feature>_implementation_plan.md` | Ja |
+| Deployment-Checkliste | `docs/<feature>_deployment.md` | Ja, wenn Infrastruktur-Änderungen |
 | Teststrategie | `docs/<feature>_test_strategy.md` | Optional |
 
 ### Architekturkonzept (`_architecture_concept.md`)
@@ -30,6 +31,7 @@ Das Architekturkonzept beschreibt das **Was** und **Wie** auf fachlicher und tec
 | Datenmodell | Neue Tabellen, Felder, Relationen (ER-Diagramm empfohlen) |
 | Services & Klassen | Neue Module, Klassen und deren Verantwortlichkeiten |
 | API-Schnittstellen | Neue Endpoints, Request/Response-Schemas |
+| Security & Privacy | Authentifizierung, Autorisierung (RBAC), Datenvalidierung, PII-Schutz |
 | Phasen-Roadmap | Aufteilung in Implementierungsphasen (z.B. Phase 1: Grundgerüst, Phase 2: Business-Logik) |
 | Abhängigkeiten | Externe Services, bestehende Module, Konfiguration |
 
@@ -58,6 +60,10 @@ Falls das Feature komplexe Testszenarien erfordert, wird die Teststrategie separ
 *   **Integration Tests:** Welche Endpoints und Datenflüsse?
 *   **E2E Tests:** Welche User-Journeys werden end-to-end validiert?
 
+### Deployment-Checkliste (`_deployment.md`, pflicht bei Infrastruktur-Änderungen)
+
+Wenn das Feature neue Azure-Komponenten, Environment-Variablen, DB-Änderungen, Pods oder externe Abhängigkeiten einführt, ist eine Deployment-Checkliste Pflicht. Vorlage und Pflicht-Sektionen siehe `standards/docs/deployment_checklist.md`.
+
 ### Abnahme-Checkliste Phase 1
 
 - [ ] Architekturkonzept vollständig (alle Mindest-Sektionen vorhanden)?
@@ -65,7 +71,9 @@ Falls das Feature komplexe Testszenarien erfordert, wird die Teststrategie separ
 - [ ] Phasen-Roadmap definiert?
 - [ ] Datenmodell dokumentiert (Tabellen, Felder, Relationen)?
 - [ ] API-Schnittstellen definiert (Endpoints, Schemas)?
+- [ ] Security-Aspekte (Auth, RBAC, Validierung) berücksichtigt?
 - [ ] Abhängigkeiten und Konfiguration identifiziert?
+- [ ] Deployment-Checkliste erstellt (falls Infrastruktur-Änderungen)?
 
 ---
 
@@ -221,6 +229,7 @@ Priorisiert in drei Stufen:
 - [ ] Querschnitts-Findings dokumentiert und kategorisiert?
 - [ ] Optimierungs-Empfehlungen priorisiert (P1/P2/P3)?
 - [ ] Alle P1-Findings behoben?
+- [ ] Deployment-Checkliste vollständig und verifiziert (falls vorhanden)?
 
 ---
 
@@ -309,3 +318,4 @@ Dieser Prozess ist lebendig. Folgende Technologien und Methoden sind für die zu
 | `standards/docs/architect_workflow.md` | Architekten-Ampel und Refactoring-Strategie |
 | `standards/docs/implementation.md` | Coding Standards, Naming, Typing, Architektur-Layer |
 | `standards/docs/ai_guidelines.md` | AI-spezifische Coding-Regeln und Quality Gates |
+| `standards/docs/deployment_checklist.md` | Deployment-Dokumentation: Vorlage und Pflicht-Sektionen |
