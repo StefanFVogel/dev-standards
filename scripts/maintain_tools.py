@@ -30,9 +30,10 @@ DEAD_CODE_ALLOWLIST = {
 
 def run_cmd(cmd):
     try:
-        return subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        return subprocess.run(cmd, shell=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
     except Exception as e:
-        return f"Error: {str(e)}"
+        # Fallback return object to prevent crashes on attribute access
+        return subprocess.CompletedProcess(args=cmd, returncode=1, stdout="", stderr=str(e))
 
 
 def py_tool(tool_name):
@@ -40,6 +41,22 @@ def py_tool(tool_name):
     if os.name == "nt":
         venv_path += ".exe"
     return venv_path if os.path.exists(venv_path) else tool_name
+
+
+def _find_npx():
+    """Finds npx, checking nodeenv path if not on system PATH."""
+    if shutil.which("npx"):
+        return "npx"
+    # nodeenv installs into <venv>/node_env/Scripts/ (Windows) or <venv>/node_env/bin/ (Unix)
+    venv_dir = os.path.dirname(sys.executable)
+    node_env = os.path.normpath(os.path.join(venv_dir, "..", "node_env"))
+    bin_dir = os.path.join(node_env, "Scripts" if os.name == "nt" else "bin")
+    npx_cmd = os.path.join(bin_dir, "npx.cmd" if os.name == "nt" else "npx")
+    if os.path.exists(npx_cmd):
+        # Also ensure node.exe is findable by adding bin_dir to PATH for child processes
+        os.environ["PATH"] = bin_dir + os.pathsep + os.environ.get("PATH", "")
+        return npx_cmd
+    return None
 
 
 def _is_dead_code_allowed(line):
@@ -61,11 +78,61 @@ def get_vulture_dead_code(py_files):
 
 def get_duplication_rate(files):
     """Extrahiert die Duplikationsrate aus jscpd."""
-    if not shutil.which("npx") or not files:
+    npx = _find_npx()
+    if not npx or not files:
         return 0
-    res = run_cmd(f"npx jscpd {' '.join(files)} --threshold {MAX_DUPLICATION} --reporter json")
+    res = run_cmd(f"{npx} jscpd {' '.join(files)} --threshold {MAX_DUPLICATION} --reporter json")
     match = re.search(r"(\d+\.\d+)%\s+duplicated lines", res.stdout)
     return float(match.group(1)) if match else 0
+
+
+def get_biome_issues(js_files):
+    """Prüft JS/TS Dateien mit Biome und extrahiert Komplexitäts-Warnungen."""
+    npx = _find_npx()
+    if not npx or not js_files:
+        return [], 0
+    # --reporter=json liefert strukturierten Output
+    res = run_cmd(f"{npx} biome lint {' '.join(js_files)} --reporter=json")
+    issues = []
+    max_comp = 0
+    try:
+        data = json.loads(res.stdout)
+        for d in data.get("diagnostics", []):
+            desc = d.get("description", "")
+            # Versuche, die Komplexitätszahl aus der Meldung zu lesen
+            # Bsp: "This function has a cognitive complexity of 25..."
+            comp_match = re.search(r"complexity of (\d+)", desc)
+            
+            if comp_match:
+                score = int(comp_match.group(1))
+                max_comp = max(max_comp, score)
+                loc = d.get("location", {})
+                path = loc.get("path", {}).get("file", "unknown")
+                issues.append(f"JS KOMPLEXITÄT: {path} hat Score {score} (Limit überschritten)")
+            elif d.get("severity") == "error":
+                loc = d.get("location", {})
+                path = loc.get("path", {}).get("file", "unknown")
+                issues.append(f"JS LINT: {path} - {desc}")
+    except (json.JSONDecodeError, AttributeError):
+        pass
+    return issues, max_comp
+
+
+def get_djlint_issues(html_files):
+    """Prüft HTML Dateien mit djLint."""
+    if not html_files:
+        return []
+    # --json liefert strukturierten Output
+    res = run_cmd(f"{py_tool('djlint')} {' '.join(html_files)} --lint --json")
+    issues = []
+    try:
+        data = json.loads(res.stdout)
+        for filepath, errors in data.items():
+            for err in errors:
+                issues.append(f"HTML LINT: {filepath}:{err.get('line')} - {err.get('message')}")
+    except (json.JSONDecodeError, AttributeError):
+        pass
+    return issues
 
 
 def _is_complexity_allowed(filepath, name):
@@ -82,25 +149,33 @@ def get_complexity_max(py_files):
     try:
         data = json.loads(res.stdout)
         scores = [
-            b.get("complexity", 0) for f, blocks in data.items() for b in blocks
-            if not _is_complexity_allowed(f, b.get("name", ""))
+            b.get("complexity", 0) for f, blocks in data.items()
+            if isinstance(blocks, list)
+            for b in blocks
+            if isinstance(b, dict) and not _is_complexity_allowed(f, b.get("name", ""))
         ]
         return max(scores) if scores else 0
     except (json.JSONDecodeError, ValueError):
         return 0
 
 
-def evaluate_ampel(max_cc, dead_items, dup_rate):
+def evaluate_ampel(max_cc, js_max_cc, dead_items, dup_rate, lint_issues):
     """Evaluates metrics and returns (status, issues)."""
     issues = []
     status = "🟢 GRÜN"
 
+    # Python Komplexität
     if max_cc >= CRITICAL_COMPLEXITY:
         status = "🔴 ROT"
-        issues.append(f"KOMPLEXITÄT: {max_cc} (Kritisch!)")
+        issues.append(f"KOMPLEXITÄT (Python): {max_cc} (Kritisch!)")
     elif max_cc >= MAX_COMPLEXITY:
         status = "🟡 GELB"
-        issues.append(f"KOMPLEXITÄT: {max_cc} (Hoch)")
+        issues.append(f"KOMPLEXITÄT (Python): {max_cc} (Hoch)")
+
+    # JS Komplexität (Biome Standard Limit ist oft 15)
+    if js_max_cc > 15:
+        status = "🔴 ROT"
+        issues.append(f"KOMPLEXITÄT (JS): {js_max_cc} (Cognitive Complexity zu hoch!)")
 
     if len(dead_items) > 0:
         status = "🔴 ROT"
@@ -109,6 +184,10 @@ def evaluate_ampel(max_cc, dead_items, dup_rate):
     if dup_rate > MAX_DUPLICATION:
         status = "🔴 ROT"
         issues.append(f"DUPLIKATE: {dup_rate}% (Struktur-Problem)")
+
+    if lint_issues:
+        status = "🔴 ROT"
+        issues.extend(lint_issues)
 
     return status, issues
 
@@ -122,9 +201,11 @@ def _get_filtered_complexity(py_files):
         return {}
     filtered = {}
     for filepath, blocks in sorted(data.items()):
+        if not isinstance(blocks, list):
+            continue
         entries = [
             b for b in blocks
-            if b.get("rank", "A") not in ("A", "B") and not _is_complexity_allowed(filepath, b.get("name", ""))
+            if isinstance(b, dict) and b.get("rank", "A") not in ("A", "B") and not _is_complexity_allowed(filepath, b.get("name", ""))
         ]
         if entries:
             filtered[filepath] = entries
@@ -148,8 +229,9 @@ def print_detailed_scan(py_files, dead_items, files):
             for item in dead_items:
                 print(f"  {item}")
 
-    if shutil.which("npx"):
-        subprocess.run(f"npx jscpd {' '.join(files)}", shell=True)
+    npx = _find_npx()
+    if npx:
+        subprocess.run(f"{npx} jscpd {' '.join(files)}", shell=True)
 
 
 def run_review(mode):
@@ -159,12 +241,19 @@ def run_review(mode):
         return
 
     py_files = [f for f in files if f.endswith(".py")]
+    js_files = [f for f in files if f.endswith((".js", ".ts", ".jsx", ".tsx"))]
+    html_files = [f for f in files if f.endswith(".html")]
 
     max_cc = get_complexity_max(py_files)
     dead_items = get_vulture_dead_code(py_files)
     dup_rate = get_duplication_rate(files)
 
-    status, issues = evaluate_ampel(max_cc, dead_items, dup_rate)
+    lint_issues = []
+    js_issues, js_max_cc = get_biome_issues(js_files)
+    lint_issues.extend(js_issues)
+    lint_issues.extend(get_djlint_issues(html_files))
+
+    status, issues = evaluate_ampel(max_cc, js_max_cc, dead_items, dup_rate, lint_issues)
 
     print(f"\n{'=' * 60}")
     print(f"\U0001f3db\ufe0f  ARCHITEKTEN-AMPEL: {status}")
@@ -197,7 +286,8 @@ def get_files(mode):
     }
     res = run_cmd(cmds.get(mode, cmds["commit"]))
     files = [f.strip() for f in res.stdout.splitlines() if f.strip() and os.path.exists(f)]
-    return [f for f in files if f.endswith((".py", ".js", ".ts", ".sql"))]
+    # Erweiterte Dateiendungen für JS/HTML
+    return [f for f in files if f.endswith((".py", ".js", ".ts", ".jsx", ".tsx", ".html", ".sql"))]
 
 
 def setup_tools():
@@ -205,7 +295,8 @@ def setup_tools():
 
     # 1. Python-Pakete installieren
     print("\n[1/3] Python-Pakete installieren...")
-    subprocess.run([sys.executable, "-m", "pip", "install", "-U", "ruff", "vulture", "sqlfluff", "pyright", "radon"])
+    # djlint hinzugefügt
+    subprocess.run([sys.executable, "-m", "pip", "install", "-U", "ruff", "vulture", "sqlfluff", "pyright", "radon", "djlint"])
 
     # 2. Node.js/npm installieren (falls nicht vorhanden), via nodeenv (pyright-Abhängigkeit)
     if not shutil.which("npm"):
