@@ -10,7 +10,7 @@ Ein `_deployment.md` ist **Pflicht**, sobald mindestens eine der folgenden Bedin
 
 | Kategorie | Beispiel |
 |-----------|----------|
-| Neue Azure-Komponenten | Service Bus Topic/Subscription, Redis Cache, Storage Account |
+| Neue Cloud-Komponenten | Service Bus, Redis Cache, Storage Account, Lambda/Functions |
 | Neue Berechtigungen (IAM) | Managed Identity Rollen, Access Policies |
 | Neue Environment-Variablen | Feature Flags, Konfigurationswerte |
 | Neue Secrets | API Keys, Connection Strings (KeyVault Referenzen) |
@@ -48,33 +48,23 @@ Branch: feature/alerts
 Betroffene Umgebungen: DEV, PROD
 ```
 
-### 2. Azure-Komponenten
+### 2. Cloud-Komponenten (Azure/AWS/GCP)
 
-Neue oder geänderte Azure-Ressourcen mit den exakten CLI-Befehlen zur Erstellung.
+Neue oder geänderte Cloud-Ressourcen mit den exakten CLI-Befehlen zur Erstellung.
 
 ```markdown
-## Azure-Komponenten
+## Cloud-Komponenten
 
-### Service Bus
+### Service Bus (Beispiel)
 
 | Ressource | Typ | Name | Namespace |
 |-----------|-----|------|-----------|
-| Topic | Service Bus Topic | `portfolio_events` | `sb-stockbuddy-prod` |
-| Subscription | Topic Subscription | `AlertsCleanupSub` | auf Topic `portfolio_events` |
+| Topic | Service Bus Topic | `portfolio_events` | `sb-prod` |
 
 **Erstellen:**
 
 \```bash
-az servicebus topic create \
-  --resource-group $RESOURCE_GROUP \
-  --namespace-name $NAMESPACE \
-  --name portfolio_events
-
-az servicebus topic subscription create \
-  --resource-group $RESOURCE_GROUP \
-  --namespace-name $NAMESPACE \
-  --topic-name portfolio_events \
-  --name AlertsCleanupSub
+az servicebus topic create ...
 \```
 ```
 
@@ -87,16 +77,7 @@ Neue Berechtigungen (RBAC), die für Managed Identities oder User/Groups vergebe
 
 | Principal (Wer?) | Rolle (Was?) | Scope (Wo?) | Begründung |
 |------------------|--------------|-------------|------------|
-| `mi-stockbuddy-aks` | `Azure Service Bus Data Sender` | Topic `portfolio_events` | Pod muss Events senden dürfen |
-
-**Zuweisen:**
-
-\```bash
-az role assignment create \
-  --assignee $MI_OBJECT_ID \
-  --role "Azure Service Bus Data Sender" \
-  --scope $TOPIC_RESOURCE_ID
-\```
+| `mi-app-aks` | `Data Sender` | Topic `portfolio_events` | Pod muss Events senden dürfen |
 ```
 
 ### 4. Environment-Variablen
@@ -108,8 +89,7 @@ Alle neuen oder geänderten Umgebungsvariablen mit Beschreibung und Quelle.
 
 | Variable | Beschreibung | Pflicht | Quelle | Beispiel |
 |----------|-------------|---------|--------|----------|
-| `SERVICE_BUS_PORTFOLIO_EVENTS_TOPIC` | Topic-Name für Portfolio-Events | Nein (Default: `portfolio_events`) | Konfiguration | `portfolio_events` |
-| `SERVICE_BUS_PORTFOLIO_EVENTS_SUBSCRIPTION` | Subscription-Name | Nein (Default: `AlertsCleanupSub`) | Konfiguration | `AlertsCleanupSub` |
+| `SERVICE_BUS_TOPIC` | Topic-Name | Nein | Konfiguration | `portfolio_events` |
 ```
 
 ### 5. Secrets / KeyVault
@@ -122,7 +102,6 @@ Alle neuen oder geänderten Umgebungsvariablen mit Beschreibung und Quelle.
 | Secret Name (KeyVault) | Env-Variable im Pod | Typ | Rotation |
 |------------------------|---------------------|-----|----------|
 | `SendGridApiKey` | `SERVICE_EMAIL_API_KEY` | API Key | Manuell (1x Jahr) |
-| `SbConnectionString` | `SERVICE_BUS_CONNECTION_STRING` | Connection String | Auto |
 ```
 
 ### 6. Datenbank-Änderungen (SQL)
@@ -136,13 +115,10 @@ Alle DDL-Statements, die manuell oder per Migration auf der Datenbank ausgeführ
 
 | # | Typ | Tabelle | Statement | Rollback |
 |---|-----|---------|-----------|----------|
-| 1 | ALTER TABLE | UserAlertConfig | `ALTER TABLE UserAlertConfig ADD deleted_at DATETIME NULL;` | `ALTER TABLE UserAlertConfig DROP COLUMN deleted_at;` |
-| 2 | CREATE INDEX | UserAlertConfig | `CREATE INDEX ix_alert_deleted ON UserAlertConfig(deleted_at);` | `DROP INDEX ix_alert_deleted ON UserAlertConfig;` |
-
-**Hinweis:** Kein Alembic — Statements manuell auf DEV und PROD ausführen.
+| 1 | ALTER TABLE | UserConfig | `ALTER TABLE UserConfig ADD deleted_at DATETIME NULL;` | `ALTER TABLE UserConfig DROP COLUMN deleted_at;` |
 ```
 
-### 7. Kubernetes / Pods
+### 7. Kubernetes / Pods / Docker
 
 Neue oder geänderte Deployments, Services, CronJobs.
 
@@ -153,14 +129,7 @@ Neue oder geänderte Deployments, Services, CronJobs.
 
 | Name | Image | Replicas | Command | Ressourcen |
 |------|-------|----------|---------|------------|
-| `portfolio-consumer` | `stockbuddy:latest` | 1 | `python -m stock_buddy.alerts.portfolio_transaction_consumer` | 256Mi / 0.25 CPU |
-
-### Manifest-Änderungen
-
-| Datei | Änderung |
-|-------|----------|
-| `manifests/consumer-deployment.yaml` | Neues Deployment hinzufügen |
-| `manifests/configmap.yaml` | Neue Env-Vars ergänzen |
+| `consumer` | `app:latest` | 1 | `python -m app.consumer` | 256Mi / 0.25 CPU |
 ```
 
 ### 8. Deployment-Reihenfolge
@@ -172,12 +141,11 @@ Die exakte Reihenfolge, in der die Schritte ausgeführt werden müssen.
 
 | # | Schritt | Umgebung | Befehl / Aktion | Verifizierung |
 |---|---------|----------|-----------------|---------------|
-| 1 | Azure-Komponenten erstellen | Azure Portal / CLI | `az servicebus topic create ...` | Topic im Portal sichtbar |
-| 2 | IAM Rollen zuweisen | Azure CLI | `az role assignment create ...` | `az role assignment list` |
+| 1 | Cloud-Komponenten erstellen | Portal / CLI | `az servicebus topic create ...` | Topic im Portal sichtbar |
+| 2 | IAM Rollen zuweisen | CLI | `az role assignment create ...` | `az role assignment list` |
 | 3 | SQL-Migration ausführen | DEV DB | `ALTER TABLE ...` | Spalte in SSMS sichtbar |
-| 4 | Secrets in KeyVault anlegen | Azure Portal | Secret erstellen | Secret vorhanden |
-| 5 | Environment-Variablen setzen | K8s ConfigMap | `kubectl apply -f configmap.yaml` | `kubectl describe configmap` |
-| 6 | Application deployen | AKS | CI/CD Pipeline | Pod Running, Health-Check OK |
+| 4 | Secrets anlegen | Portal | Secret erstellen | Secret vorhanden |
+| 5 | App deployen | CI/CD | Pipeline | Pod Running, Health-Check OK |
 ```
 
 ### 9. Rollback-Plan
@@ -189,10 +157,9 @@ Schritte zum Rückgängigmachen bei Fehlern.
 
 | # | Schritt | Befehl / Aktion |
 |---|---------|-----------------|
-| 1 | Consumer Pod stoppen | `kubectl scale deployment portfolio-consumer --replicas=0` |
-| 2 | SQL-Rollback | `ALTER TABLE UserAlertConfig DROP COLUMN deleted_at;` |
+| 1 | Pod stoppen | `kubectl scale deployment ... --replicas=0` |
+| 2 | SQL-Rollback | `ALTER TABLE ... DROP COLUMN ...;` |
 | 3 | Vorherige App-Version deployen | CI/CD: Rollback auf Tag `v1.x.x` |
-| 4 | Azure-Komponenten entfernen (optional) | `az servicebus topic delete ...` |
 ```
 
 ### 10. Verifizierung / Smoke Tests
@@ -204,9 +171,8 @@ Manuelle oder automatisierte Tests, die nach dem Deployment durchgeführt werden
 
 | # | Test | Erwartetes Ergebnis |
 |---|------|---------------------|
-| 1 | `curl -X DELETE /alerts/{id}` | 204, deleted_at gesetzt in DB |
-| 2 | Consumer-Logs prüfen | "Hard-deleted alert ..." im Log |
-| 3 | `PATCH /settings/strategies/` mit `dynamic_alerts_active: false` | Event auf Service Bus |
+| 1 | `curl -X DELETE /api/{id}` | 204, deleted_at gesetzt in DB |
+| 2 | Logs prüfen | "Hard-deleted ..." im Log |
 ```
 
 ---
@@ -215,7 +181,7 @@ Manuelle oder automatisierte Tests, die nach dem Deployment durchgeführt werden
 
 Vor dem Merge in Main müssen alle zutreffenden Punkte abgehakt sein:
 
-- [ ] Alle neuen Azure-Komponenten dokumentiert (mit CLI-Befehlen)?
+- [ ] Alle neuen Cloud-Komponenten dokumentiert (mit CLI-Befehlen)?
 - [ ] Alle IAM-Rollen und Berechtigungen definiert?
 - [ ] Alle neuen Environment-Variablen gelistet?
 - [ ] Alle Secrets referenziert (keine Klartext-Secrets)?

@@ -1,8 +1,6 @@
-# 🎯 Feature Development Workflow
+# 🎯 Feature Development Workflow (Perfection Mode)
 
 Dieses Dokument beschreibt den verbindlichen **4-Phasen-Prozess** für die Entwicklung neuer Features. Jedes Feature durchläuft die Phasen **Spezifikation → Prototyp → Architektur-Review → Code-Review**, bevor es in den Main-Branch gemerged wird. Der Prozess stellt sicher, dass Features vollständig spezifiziert, automatisiert getestet, architektonisch sauber und dokumentiert abgenommen werden.
-
-> **Referenz:** Das Alerts-Feature wurde als erstes Feature nach diesem Verfahren entwickelt und dient als Vorlage (siehe `docs/alert_architecture_concept.md`, `docs/alert_implementation_plan.md`, `docs/alert_codereview.md`).
 
 ---
 
@@ -20,6 +18,7 @@ Für jedes Feature werden folgende Dokumente im `docs/`-Verzeichnis des Projekts
 | Implementierungsplan | `docs/<feature>_implementation_plan.md` | Ja |
 | Deployment-Checkliste | `docs/<feature>_deployment.md` | Ja, wenn Infrastruktur-Änderungen |
 | Teststrategie | `docs/<feature>_test_strategy.md` | Optional |
+| ADR (Architecture Decision Record) | `docs/adr/001_...md` | Ja, bei Architekturentscheidungen |
 
 ### Architekturkonzept (`_architecture_concept.md`)
 
@@ -34,6 +33,7 @@ Das Architekturkonzept beschreibt das **Was** und **Wie** auf fachlicher und tec
 | Security & Privacy | Authentifizierung, Autorisierung (RBAC), Datenvalidierung, PII-Schutz |
 | Phasen-Roadmap | Aufteilung in Implementierungsphasen (z.B. Phase 1: Grundgerüst, Phase 2: Business-Logik) |
 | Abhängigkeiten | Externe Services, bestehende Module, Konfiguration |
+| Pre-Mortem Analyse | Warum könnte dieses Feature scheitern? (Risikominimierung) |
 
 ### Implementierungsplan (`_implementation_plan.md`)
 
@@ -62,7 +62,7 @@ Falls das Feature komplexe Testszenarien erfordert, wird die Teststrategie separ
 
 ### Deployment-Checkliste (`_deployment.md`, pflicht bei Infrastruktur-Änderungen)
 
-Wenn das Feature neue Azure-Komponenten, Environment-Variablen, DB-Änderungen, Pods oder externe Abhängigkeiten einführt, ist eine Deployment-Checkliste Pflicht. Vorlage und Pflicht-Sektionen siehe `standards/docs/deployment_checklist.md`.
+Wenn das Feature neue Cloud-Komponenten, Environment-Variablen, DB-Änderungen, Pods oder externe Abhängigkeiten einführt, ist eine Deployment-Checkliste Pflicht. Vorlage und Pflicht-Sektionen siehe `standards/docs/deployment_checklist.md`.
 
 ### Abnahme-Checkliste Phase 1
 
@@ -74,19 +74,23 @@ Wenn das Feature neue Azure-Komponenten, Environment-Variablen, DB-Änderungen, 
 - [ ] Security-Aspekte (Auth, RBAC, Validierung) berücksichtigt?
 - [ ] Abhängigkeiten und Konfiguration identifiziert?
 - [ ] Deployment-Checkliste erstellt (falls Infrastruktur-Änderungen)?
+- [ ] Pre-Mortem Analyse durchgeführt?
 
 ---
 
-## 🤖 Phase 2: Prototyp (Claude Code)
+## 🤖 Phase 2: Prototyp (Coding)
 
 **Ziel:** Funktionierende Implementierung, validiert gegen automatische Tests.
 
-### Vorgehen
+### Vorgehen (TDD Pflicht)
 
-1.  **Kontext laden:** Claude Code erhält die Spezifikation (Architekturkonzept + Implementierungsplan) als Kontext.
+1.  **Kontext laden:** Die Spezifikation (Architekturkonzept + Implementierungsplan) dient als Kontext.
 2.  **Feature-Branch erstellen:** Alle Änderungen in einem dedizierten Feature-Branch (`feature/<feature-name>`).
 3.  **Tasks abarbeiten:** Jeden Task aus dem Implementierungsplan der Reihe nach umsetzen und die Checkbox abhaken.
-4.  **Tests schreiben:** Automatische Tests parallel zur Implementierung schreiben.
+4.  **TDD (Test Driven Development):**
+    *   **RED:** Schreibe den Test, der fehlschlägt.
+    *   **GREEN:** Implementiere den Code, damit der Test besteht.
+    *   **REFACTOR:** Optimiere den Code.
 5.  **Tests bestehen lassen:** `pytest` muss grün sein, bevor die Phase abgeschlossen wird.
 6.  **E2E validieren:** Falls eine Teststrategie existiert, die definierten E2E-Szenarien durchspielen.
 
@@ -101,6 +105,7 @@ Wenn das Feature neue Azure-Komponenten, Environment-Variablen, DB-Änderungen, 
 
 - [ ] Alle Tasks aus dem Implementierungsplan abgehakt?
 - [ ] `pytest` grün (alle Tests bestanden)?
+- [ ] TDD eingehalten (Test vor Code)?
 - [ ] Keine Breaking Changes an bestehenden Tests?
 - [ ] Feature-Branch erstellt und Code committet?
 - [ ] E2E-Szenarien validiert (falls Teststrategie vorhanden)?
@@ -122,12 +127,12 @@ Wenn das Feature neue Azure-Komponenten, Environment-Variablen, DB-Änderungen, 
     | Ampel | Bedeutung | Aktion |
     |-------|-----------|--------|
     | 🟢 GRÜN | Alle Metriken im Zielbereich | Weiter zu Phase 4 |
-    | 🟡 GELB | Komplexität ≥ 10 (Radon C) | Refactoring: Funktionen aufteilen, Early Returns |
-    | 🔴 ROT | Komplexität ≥ 20, Toter Code, Duplikation ≥ 5% | Blockierend: Sofort beheben |
+    | 🟡 GELB | Komplexität ≥ 6 (Radon B) | Refactoring: Funktionen aufteilen, Early Returns |
+    | 🔴 ROT | Komplexität ≥ 10, Toter Code, Duplikation ≥ 5% | Blockierend: Sofort beheben |
 
 3.  **Bei GELB/ROT:** Refactoring nach den Goldenen Regeln aus `architect_workflow.md` durchführen:
     *   Toter Code sofort löschen (Vulture).
-    *   Komplexe Funktionen aufteilen (Radon CC ≤ 10).
+    *   Komplexe Funktionen aufteilen (Radon CC ≤ 6).
     *   Duplikate in Hilfsfunktionen extrahieren (jscpd < 5%).
 4.  **Iterieren:** Schritte 1–3 wiederholen bis die Ampel **GRÜN** zeigt.
 5.  **Tests erneut ausführen:** `pytest` muss weiterhin grün sein.
@@ -230,6 +235,8 @@ Priorisiert in drei Stufen:
 - [ ] Optimierungs-Empfehlungen priorisiert (P1/P2/P3)?
 - [ ] Alle P1-Findings behoben?
 - [ ] Deployment-Checkliste vollständig und verifiziert (falls vorhanden)?
+- [ ] **Checklist-Driven Review:** Projektspezifische Checkliste abgehakt?
+- [ ] **Rollback-Plan:** Getestet und dokumentiert?
 
 ---
 
@@ -240,8 +247,8 @@ Priorisiert in drei Stufen:
 | Phase | Ziel | Input | Output | Verantwortlich |
 |-------|------|-------|--------|----------------|
 | 1. Spezifikation | Anforderungen dokumentieren | Feature-Idee, fachliche Anforderungen | `_architecture_concept.md`, `_implementation_plan.md` | Entwickler + Product Owner |
-| 2. Prototyp | Funktionierende Implementierung | Spezifikations-Dokumente | Feature-Branch mit Code + Tests | Claude Code + Entwickler |
-| 3. Architektur-Review | Code-Qualität sicherstellen | Feature-Branch | Grüne Architekten-Ampel | Claude Code + Entwickler |
+| 2. Prototyp | Funktionierende Implementierung | Spezifikations-Dokumente | Feature-Branch mit Code + Tests | Entwickler |
+| 3. Architektur-Review | Code-Qualität sicherstellen | Feature-Branch | Grüne Architekten-Ampel | Entwickler |
 | 4. Code-Review | Systematische Abnahme | Feature-Branch + Spezifikation | `_codereview.md` | Entwickler (Review) |
 
 ### Flussdiagramm
