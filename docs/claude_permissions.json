@@ -1,0 +1,58 @@
+{
+  "_comment": "Permission template for .claude/settings.local.json. {{PROJECT_ROOT_UNIX}} is replaced by maintain_tools.py with the git-bash-style project path.",
+  "permissions": {
+    "allow": [
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "NotebookEdit",
+      "WebSearch",
+      "WebFetch",
+      "mcp__ide__getDiagnostics",
+
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)",
+      "Bash(which:*)",
+      "Bash(echo:*)",
+      "Bash(export:*)",
+
+      "Bash(cd {{PROJECT_ROOT_UNIX}}:*)",
+      "Bash(python:*)",
+      "Bash(py:*)",
+      "Bash(pip:*)",
+      "Bash(pip show:*)",
+      "Bash(PYTHONIOENCODING=utf-8 python:*)",
+      "Bash(PYTHONIOENCODING=utf-8 .venv:*)",
+      "Bash(PYTHONTRACEMALLOC=20 python:*)",
+      "Bash(.venv/Scripts:*)",
+      "Bash(.venv/node_env:*)",
+      "Bash(source:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(rm:*)",
+      "Bash(xargs:*)",
+
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git branch:*)",
+      "Bash(git show:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git stash:*)"
+    ],
+    "deny": [
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git reset:*)",
+      "Bash(git checkout:*)",
+      "Bash(git rebase:*)",
+      "Bash(git merge:*)"
+    ]
+  }
+}

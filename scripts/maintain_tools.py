@@ -290,21 +290,124 @@ def get_files(mode):
     return [f for f in files if f.endswith((".py", ".js", ".ts", ".jsx", ".tsx", ".html", ".sql"))]
 
 
+def _get_project_root():
+    """Returns the native project root path from git, or None if not in a git repo."""
+    res = run_cmd("git rev-parse --show-toplevel")
+    if res.returncode != 0 or not res.stdout.strip():
+        return None
+    return res.stdout.strip()
+
+
+def _to_unix_path(path):
+    """Converts a Windows path like 'C:/Users/...' to git-bash-style '/c/Users/...'."""
+    if len(path) >= 2 and path[1] == ":":
+        return "/" + path[0].lower() + path[2:]
+    return path
+
+
+def _sync_claude_commands():
+    """Copies shared Claude Code commands from standards/commands/ to .claude/commands/ in the project root."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    commands_src = os.path.normpath(os.path.join(script_dir, "..", "commands"))
+    if not os.path.isdir(commands_src):
+        return
+
+    project_root = _get_project_root()
+    if not project_root:
+        print("[WARN] Kein Git-Repository gefunden -- ueberspringe Command-Sync.")
+        return
+
+    commands_dst = os.path.join(project_root, ".claude", "commands")
+    os.makedirs(commands_dst, exist_ok=True)
+
+    copied = 0
+    for filename in os.listdir(commands_src):
+        if not filename.endswith(".md"):
+            continue
+        src_file = os.path.join(commands_src, filename)
+        dst_file = os.path.join(commands_dst, filename)
+        shutil.copy2(src_file, dst_file)
+        copied += 1
+
+    if copied:
+        print(f"[OK] {copied} Claude-Command(s) synchronisiert -> {commands_dst}")
+
+
+def _sync_claude_permissions():
+    """Creates .claude/settings.local.json from the permissions template if it doesn't exist.
+
+    If the file already exists, merges missing permissions from the template
+    without removing any existing user-customized entries.
+    """
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    template_path = os.path.normpath(os.path.join(script_dir, "..", "docs", "claude_permissions.json"))
+    if not os.path.isfile(template_path):
+        return
+
+    project_root = _get_project_root()
+    if not project_root:
+        print("[WARN] Kein Git-Repository gefunden -- ueberspringe Permissions-Sync.")
+        return
+
+    # Read template and replace placeholder with actual project root
+    with open(template_path, encoding="utf-8") as f:
+        template = json.load(f)
+
+    template.pop("_comment", None)
+    template_allow = template.get("permissions", {}).get("allow", [])
+    template_deny = template.get("permissions", {}).get("deny", [])
+
+    # Replace {{PROJECT_ROOT_UNIX}} with git-bash-style path for Claude Code
+    unix_root = _to_unix_path(project_root)
+    template_allow = [p.replace("{{PROJECT_ROOT_UNIX}}", unix_root) for p in template_allow]
+
+    settings_path = os.path.join(project_root, ".claude", "settings.local.json")
+    os.makedirs(os.path.dirname(settings_path), exist_ok=True)
+
+    if os.path.isfile(settings_path):
+        # Merge: add missing permissions, keep existing ones
+        with open(settings_path, encoding="utf-8") as f:
+            current = json.load(f)
+        current_allow = set(current.get("permissions", {}).get("allow", []))
+        current_deny = set(current.get("permissions", {}).get("deny", []))
+
+        added_allow = [p for p in template_allow if p not in current_allow]
+        added_deny = [p for p in template_deny if p not in current_deny]
+
+        if not added_allow and not added_deny:
+            print("[OK] Permissions bereits aktuell.")
+            return
+
+        current.setdefault("permissions", {})
+        current["permissions"]["allow"] = sorted(current_allow | set(template_allow))
+        current["permissions"]["deny"] = sorted(current_deny | set(template_deny))
+
+        with open(settings_path, "w", encoding="utf-8") as f:
+            json.dump(current, f, indent=2, ensure_ascii=False)
+            f.write("\n")
+        print(f"[OK] Permissions aktualisiert: +{len(added_allow)} allow, +{len(added_deny)} deny")
+    else:
+        # Create fresh from template
+        settings = {"permissions": {"allow": template_allow, "deny": template_deny}}
+        with open(settings_path, "w", encoding="utf-8") as f:
+            json.dump(settings, f, indent=2, ensure_ascii=False)
+            f.write("\n")
+        print(f"[OK] Permissions erstellt -> {settings_path}")
+
+
 def setup_tools():
     print("--- [SETUP] ---")
 
     # 1. Python-Pakete installieren
-    print("\n[1/3] Python-Pakete installieren...")
-    # djlint hinzugefügt
+    print("\n[1/5] Python-Pakete installieren...")
     subprocess.run([sys.executable, "-m", "pip", "install", "-U", "ruff", "vulture", "sqlfluff", "pyright", "radon", "djlint"])
 
     # 2. Node.js/npm installieren (falls nicht vorhanden), via nodeenv (pyright-Abhängigkeit)
     if not shutil.which("npm"):
-        print("\n[2/3] npm nicht gefunden - installiere Node.js via nodeenv...")
+        print("\n[2/5] npm nicht gefunden - installiere Node.js via nodeenv...")
         node_dir = os.path.join(os.path.dirname(sys.executable), "..", "node_env")
         node_dir = os.path.normpath(node_dir)
         subprocess.run([sys.executable, "-m", "nodeenv", "--prebuilt", node_dir])
-        # npm-Pfad zur aktuellen Session hinzufügen
         if os.name == "nt":
             npm_bin = os.path.join(node_dir, "Scripts")
         else:
@@ -313,16 +416,24 @@ def setup_tools():
         if shutil.which("npm"):
             print(f"[OK] Node.js installiert in: {node_dir}")
         else:
-            print("[WARN] Node.js Installation fehlgeschlagen - Duplikationsprüfung nicht verfügbar.")
+            print("[WARN] Node.js Installation fehlgeschlagen - Duplikationsprueefung nicht verfuegbar.")
     else:
-        print("\n[2/3] npm bereits vorhanden - überspringe Node.js Installation.")
+        print("\n[2/5] npm bereits vorhanden - ueberspringe Node.js Installation.")
 
     # 3. Node.js-Pakete installieren
     if shutil.which("npm"):
-        print("\n[3/3] Node.js-Pakete installieren...")
+        print("\n[3/5] Node.js-Pakete installieren...")
         subprocess.run("npm install --save-dev @biomejs/biome knip jscpd", shell=True)
     else:
-        print("\n[3/3] Überspringe Node.js-Pakete (npm nicht verfügbar).")
+        print("\n[3/5] Ueberspringe Node.js-Pakete (npm nicht verfuegbar).")
+
+    # 4. Claude Code Commands synchronisieren
+    print("\n[4/5] Claude Code Commands synchronisieren...")
+    _sync_claude_commands()
+
+    # 5. Claude Code Permissions synchronisieren
+    print("\n[5/5] Claude Code Permissions synchronisieren...")
+    _sync_claude_permissions()
 
     print("\n[OK] Setup bereit.")
 

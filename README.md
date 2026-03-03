@@ -10,36 +10,143 @@ Zentrale Sammlung von Entwicklungsstandards, Coding Guidelines und Quality-Gate-
 | `docs/implementation.md` | Implementierungs-Richtlinien & Coding Standards (Naming, Typing, Error Handling) |
 | `docs/architect_workflow.md` | Automatisierte Qualitätskontrolle mit der Architekten-Ampel |
 | `docs/feature_development_workflow.md` | Feature-Entwicklungsprozess: Spezifikation → Prototyp → Architektur-Review → Code-Review |
-| `scripts/maintain_tools.py` | Quality-Gate-Script: Komplexität (Radon), toter Code (Vulture), Duplikation (jscpd) |
+| `docs/frontend_coding_guidelines.md` | Frontend-Coding-Standards (JS, HTML/CSS, Bootstrap-Patterns) |
+| `docs/deployment_checklist.md` | Deployment-Checkliste |
+| `docs/claude_coding_rules.md` | Coding-Regeln für Claude Code (wird per `@import` in `CLAUDE.md` geladen) |
+| `docs/claude_permissions.json` | Berechtigungs-Template für `.claude/settings.local.json` |
+| `commands/setup.md` | Claude Code Slash-Command: `/setup` — Projekt-Setup |
+| `commands/changes.md` | Claude Code Slash-Command: `/changes` — Änderungen seit letztem Commit |
+| `commands/review-fix.md` | Claude Code Slash-Command: `/review-fix` — Automatischer Review-Fix-Loop |
+| `scripts/maintain_tools.py` | Quality-Gate-Script: Setup, Review, Komplexität, toter Code, Duplikation |
 
-## Voraussetzungen
+---
 
-Das Quality-Gate-Script (`scripts/maintain_tools.py`) benötigt folgende Tools:
+## Quick Start
 
-| Tool | Zweck | Typ |
-|------|-------|-----|
-| **radon** | Zyklomatische Komplexität messen | Python-Paket |
-| **vulture** | Toten Code erkennen | Python-Paket |
-| **jscpd** | Code-Duplikation erkennen | Node.js-Paket (optional) |
+### 1. Submodule einbinden
 
-### Automatische Installation (Empfohlen)
+```bash
+git submodule add https://github.com/StefanFVogel/dev-standards.git standards
+git add .gitmodules standards
+git commit -m "Add dev-standards submodule"
+```
 
-Das Script enthält ein `--setup` Flag, das alle Tools automatisch installiert:
+### 2. Automatisches Setup ausführen
 
 ```bash
 python standards/scripts/maintain_tools.py --setup
 ```
 
-Dies führt automatisch 3 Schritte aus:
-1. **Python-Pakete** installieren: `radon`, `vulture`, `ruff`, `pyright`, `sqlfluff`
-2. **Node.js/npm** installieren via `nodeenv` (falls npm nicht vorhanden)
-3. **Node.js-Pakete** installieren: `jscpd`, `@biomejs/biome`, `knip`
+Das Script führt 5 Schritte aus:
 
-### Manuelle Installation
+| Schritt | Was passiert |
+|---------|-------------|
+| **[1/5]** Python-Pakete | `ruff`, `vulture`, `radon`, `pyright`, `sqlfluff`, `djlint` |
+| **[2/5]** Node.js | Installiert Node.js via `nodeenv` (falls npm nicht vorhanden) |
+| **[3/5]** Node-Pakete | `@biomejs/biome`, `knip`, `jscpd` |
+| **[4/5]** Claude Commands | Kopiert `standards/commands/*.md` → `.claude/commands/` |
+| **[5/5]** Claude Permissions | Generiert `.claude/settings.local.json` aus Template |
+
+Nach dem Setup stehen die Slash-Commands `/setup`, `/changes` und `/review-fix` in Claude Code zur Verfügung.
+
+### 3. CLAUDE.md konfigurieren
+
+Im Projekt eine `CLAUDE.md` anlegen und die Coding-Regeln per `@import` laden:
+
+```markdown
+# CLAUDE.md
+
+## Global Standards
+@standards/docs/claude_coding_rules.md
+
+## Project-spezifische Infos
+...
+```
+
+Die `@import`-Zeile sorgt dafür, dass Claude Code bei jedem Gespräch automatisch die Coding-Regeln aus dem Submodule lädt.
+
+---
+
+## Claude Code Integration
+
+### Übersicht
+
+```
+standards/                          Projekt/
+├── docs/                           ├── .claude/
+│   ├── claude_coding_rules.md ──@import──→ CLAUDE.md (automatisch geladen)
+│   └── claude_permissions.json ──setup──→  │   ├── settings.local.json
+├── commands/                       │   └── commands/
+│   ├── setup.md ─────────────copy──→       │       ├── setup.md → /setup
+│   ├── changes.md ───────────copy──→       │       ├── changes.md → /changes
+│   └── review-fix.md ───────copy──→        │       └── review-fix.md → /review-fix
+└── scripts/
+    └── maintain_tools.py ──────────────────→ (führt Setup + Review aus)
+```
+
+### Slash-Commands
+
+| Command | Beschreibung |
+|---------|-------------|
+| `/setup` | Führt `maintain_tools.py --setup` aus und verifiziert Permissions |
+| `/changes` | Zeigt alle Änderungen seit dem letzten Commit als Zusammenfassung |
+| `/review-fix` | Automatischer Review-Fix-Loop (max. 3 Iterationen bis Ampel GRÜN) |
+
+### Permissions
+
+Das Template `docs/claude_permissions.json` definiert die Standardberechtigungen:
+
+- **Allow:** Alle Claude-Tools (Read, Write, Edit, Glob, Grep, ...), Python/Node Kommandos, Git-Lesebefehle
+- **Deny:** Git-Schreibbefehle (`commit`, `push`, `reset`, `checkout`, `rebase`, `merge`)
+
+Der Platzhalter `{{PROJECT_ROOT_UNIX}}` wird beim Setup automatisch durch den Git-Bash-Pfad des Projekts ersetzt (z.B. `/c/Users/dev/projects/my-app`).
+
+**Merge-Verhalten:** Wenn `.claude/settings.local.json` bereits existiert, werden nur fehlende Permissions ergänzt. Eigene Anpassungen bleiben erhalten.
+
+---
+
+## Quality-Gate: Architekten-Ampel
+
+### Review ausführen
+
+```bash
+# Änderungen auf aktuellem Branch vs. main prüfen
+PYTHONIOENCODING=utf-8 python standards/scripts/maintain_tools.py --mode branch
+
+# Nur uncommittete Änderungen prüfen
+PYTHONIOENCODING=utf-8 python standards/scripts/maintain_tools.py --mode commit
+
+# Alle Dateien prüfen
+PYTHONIOENCODING=utf-8 python standards/scripts/maintain_tools.py --mode all
+```
+
+### Ampel-Schwellwerte
+
+| Ampel | Kriterium |
+|-------|----------|
+| 🟢 GRÜN | Keine Findings in geänderten Dateien |
+| 🟡 GELB | Komplexität 10–19 (Radon CC Rank C) |
+| 🔴 ROT | Komplexität ≥ 20, oder toter Code, oder Duplikation > 5%, oder Lint-Fehler |
+
+### Toolchain
+
+| Tool | Sprache | Prüfung |
+|------|---------|---------|
+| **Ruff** | Python | Linting & Formatierung |
+| **Vulture** | Python | Toter Code |
+| **Radon** | Python | Zyklomatische Komplexität |
+| **Pyright** | Python | Type-Checking |
+| **Biome** | JS/TS | Linting, Formatierung & Complexity |
+| **Knip** | JS/TS | Toter Code & ungenutzte Dependencies |
+| **jscpd** | Alle | Code-Duplikation |
+| **djLint** | HTML | Template-Linting |
+| **SQLFluff** | SQL | T-SQL Linting |
+
+### Manuelle Installation (falls kein `--setup` gewünscht)
 
 ```bash
 # Python-Tools
-pip install -U radon vulture ruff pyright sqlfluff
+pip install -U ruff vulture radon pyright sqlfluff djlint
 
 # Node.js-Tools
 npm install --save-dev @biomejs/biome knip jscpd
@@ -47,59 +154,32 @@ npm install --save-dev @biomejs/biome knip jscpd
 
 ---
 
-# Git Submodule Setup
+## Git Submodule Referenz
 
-Diese Anleitung beschreibt, wie das Repository `dev-standards` als Submodule in ein Projekt integriert wird und wie andere Entwickler das Projekt korrekt auschecken.
-
-## 1. Submodule hinzufügen
-
-Um das externe Repository direkt in den Ordner `standards` zu laden, führe im Hauptverzeichnis des Projekts folgenden Befehl aus:
+### Projekt klonen (mit Submodule)
 
 ```bash
-git submodule add https://github.com/StefanFVogel/dev-standards.git standards
-```
+# Variante A: Neues Klonen (empfohlen)
+git clone --recurse-submodules <projekt-url.git>
 
-## 2. Änderungen speichern (Commit & Push)
-
-Damit das Haupt-Repository die Verknüpfung speichert, müssen die `.gitmodules`-Datei und der neue Ordner committet werden:
-
-```bash
-git add .gitmodules standards
-git commit -m "Füge dev-standards als Submodule im Ordner 'standards' hinzu"
-git push
-```
-
----
-
-## 3. Das Projekt auschecken / klonen (Für andere Entwickler)
-
-Wenn das Projekt neu aufgesetzt oder von einem anderen Entwickler geklont wird, muss sichergestellt werden, dass auch die Inhalte des Submodules heruntergeladen werden.
-
-**Variante A: Neues Klonen (Empfohlen)**
-Hänge das Flag `--recurse-submodules` an den Clone-Befehl an, um das Hauptprojekt inklusive aller Submodule herunterzuladen:
-
-```bash
-git clone --recurse-submodules <deine-projekt-url.git>
-```
-
-**Variante B: Bereits geklont, aber Ordner 'standards' ist leer**
-Falls das Projekt mit einem normalen `git clone` heruntergeladen wurde, bleibt der Ordner `standards` zunächst leer. Führe in diesem Fall im Projektverzeichnis folgenden Befehl aus, um das Submodule nachträglich zu laden:
-
-```bash
+# Variante B: Bereits geklont, Ordner 'standards' ist leer
 git submodule update --init --recursive
 ```
 
----
+### Submodule aktualisieren
 
-## 4. Submodule aktualisieren (Optional)
-
-Wenn es im `dev-standards`-Repository neue Änderungen gibt und du diese in dein Projekt übernehmen möchtest:
+Wenn es im `dev-standards`-Repository neue Änderungen gibt:
 
 ```bash
 cd standards
 git pull origin main
 cd ..
 git add standards
-git commit -m "Aktualisiere dev-standards Submodule"
-git push
+git commit -m "Update dev-standards submodule"
+```
+
+Nach dem Update `--setup` erneut ausführen, um neue Commands und Permissions zu synchronisieren:
+
+```bash
+python standards/scripts/maintain_tools.py --setup
 ```
