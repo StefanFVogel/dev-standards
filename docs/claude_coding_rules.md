@@ -22,23 +22,36 @@ Follow `standards/docs/implementation.md` for details. Key rules:
 Follow `standards/docs/frontend_coding_guidelines.md` for details. Key rules:
 
 - `'use strict';` + class-level JSDoc on every file
-- DOM selectors as `static get SEL_*()` properties at class top (never hardcoded in methods)
-- `data-*` attributes for JS hooks (not CSS classes, not IDs unless required by Bootstrap)
+- **Form components** use `TransactionForm` pattern: `get template()` (dynamic JS HTML string), CSS class selectors (`.instrument`, `.alertLimit`), jQuery getters (`get $fieldName()`), no `<form>` tag (button `.click()` handler), `open({ onCancel, onSave, showMode })` callback pattern, `show('slide')`/`hide('slide')` animations
+- **DOM selectors in form components**: CSS class selectors via jQuery getters (`get $instrumentName() { return this.$form.find('.instrument'); }`)
+- **DOM selectors in table/widget/manager components**: `static get SEL_*()` with `data-*` attributes (never hardcoded in methods)
+- `data-*` attributes for JS hooks in static HTML (not CSS classes, not IDs unless required by Bootstrap)
 - All HTTP calls through `ApiService` (never raw `$.ajax` / `$.get`)
 - No optimistic UI — always re-fetch after mutations
-- `d-none` for visibility (no `.hide()`/`.show()` except for `slideUp`/`slideDown` animations)
-- No native `alert()`/`confirm()` — use inline Bootstrap alerts
+- `d-none` for visibility (no `.hide()`/`.show()` except for `show('slide')`/`hide('slide')` animations)
+- **Spinner pattern**: `<div class="d-none ...-spinner">` toggled via `addClass('d-none')`/`removeClass('d-none')`, buttons hidden during save (`_onBeginSave`/`_onFinishSave`)
+- **Validation**: Generic helpers `validateField()`, `validateRequiredField()`, `validatePositiveValueField()`, `markAsValid()`, `markAsInvalid()` — no inline validation logic
+- **Error display**: `_reportErrorViaTooltip()` for server errors on fields — no native `alert()`/`confirm()`, no inline alert banners in forms
 - Magic strings → `Object.freeze({...})` constants
 - `Utils.escapeHtml()` on ALL user/API data injected into HTML
 - API methods use options objects: `ApiService.get(url, { onSuccess, onError, params })`
 
 ## HTML / CSS
 
-- Custom CSS only in `resources/css/custom.css`
+- Custom CSS only in `resources/css/custom.css` — never modify `style.css`
+- Module-specific CSS (alerts, portfolio overrides) goes in `custom.css`, not `style.css`
 - No inline `style` for JS-controlled behavior
+- Form HTML is generated dynamically via JS `get template()` — only a `<div data-*-host></div>` placeholder in `index.html`
 - Bare `data-*` attributes (not `data-foo="true"`)
 - Bootstrap 5 patterns, `role="button"` + `tabindex="0"` on clickable non-button elements
 - `aria-label` on interactive elements without visible text
+
+## File Organization
+
+- **JS files**: One class per file, named after the class in kebab-case (`alert-form.js` → `AlertForm`)
+- **Form components**: Dynamic HTML via `get template()`, rendered into a host container (`<div data-*-host>`)
+- **Manager/orchestrator**: Separate file, coordinates form + table + widget, owns callbacks
+- **CSS**: All project customizations in `resources/css/custom.css`, grouped by module
 
 ## SQL
 
